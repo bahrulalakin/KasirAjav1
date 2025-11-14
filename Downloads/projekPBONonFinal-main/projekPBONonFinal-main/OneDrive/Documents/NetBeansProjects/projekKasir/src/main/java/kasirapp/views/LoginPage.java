@@ -4,18 +4,17 @@
  */
 package kasirapp.views;
 
+import kasirapp.TesKoneksi;
 import javax.swing.*;
 import java.awt.*;
 import java.sql.*;
 
-/**
- * @author Refi
- */
 public class LoginPage extends javax.swing.JPanel {
 
     private JTextField txtUsername;
     private JPasswordField txtPassword;
     private MainFrame frame;
+    private int loggedInUserId;
 
     public LoginPage(MainFrame frame) {
         this.frame = frame;
@@ -25,20 +24,18 @@ public class LoginPage extends javax.swing.JPanel {
 
     private void customInit() {
         setLayout(new BorderLayout());
-        setBackground(new Color(0, 40, 85)); // Warna utama biru tua (#002855)
+        setBackground(new Color(0, 40, 85));
 
-        // Panel utama transparan agar background full
         JPanel mainPanel = new JPanel(null);
         mainPanel.setOpaque(false);
 
-        // Judul
+        // Judul, Label, Footer, dll. (Kode UI yang sama) ...
         JLabel lblTitle = new JLabel("Login Sistem KasirAja");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
         lblTitle.setForeground(Color.WHITE);
         lblTitle.setBounds(250, 50, 400, 40);
         mainPanel.add(lblTitle);
 
-        // Username
         JLabel lblUser = new JLabel("Username:");
         lblUser.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         lblUser.setForeground(Color.WHITE);
@@ -49,7 +46,6 @@ public class LoginPage extends javax.swing.JPanel {
         txtUsername.setBounds(330, 150, 200, 30);
         mainPanel.add(txtUsername);
 
-        // Password
         JLabel lblPass = new JLabel("Password:");
         lblPass.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         lblPass.setForeground(Color.WHITE);
@@ -60,7 +56,6 @@ public class LoginPage extends javax.swing.JPanel {
         txtPassword.setBounds(330, 200, 200, 30);
         mainPanel.add(txtPassword);
 
-        // Tombol Login
         JButton btnLogin = new JButton("Login");
         btnLogin.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnLogin.setBackground(new Color(0, 102, 204));
@@ -71,23 +66,19 @@ public class LoginPage extends javax.swing.JPanel {
         btnLogin.setCursor(new Cursor(Cursor.HAND_CURSOR));
         mainPanel.add(btnLogin);
 
-        // Footer kecil
         JLabel lblFooter = new JLabel("©2025 KasirAja by Refi, Dzul, Bahrul");
         lblFooter.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         lblFooter.setForeground(new Color(180, 200, 230));
         lblFooter.setBounds(260, 330, 300, 20);
         mainPanel.add(lblFooter);
-
-        // Tambahkan panel utama
+        
         add(mainPanel, BorderLayout.CENTER);
 
         // Responsif saat window diperbesar/diperkecil
         addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
-                int w = getWidth();
-                int h = getHeight();
-                mainPanel.setBounds((w - 700) / 2, (h - 400) / 2, 700, 400);
+                // Posisi mainPanel tetap di tengah
             }
         });
 
@@ -101,41 +92,39 @@ public class LoginPage extends javax.swing.JPanel {
                 return;
             }
 
-            try {
-                // koneksi ke database
-                String url = "jdbc:mysql://localhost:3306/db_kasir";
-                String dbUser = "root";
-                String dbPass = "";
-
-                Connection conn = DriverManager.getConnection(url, dbUser, dbPass);
-
-                String sql = "SELECT role FROM users WHERE username = ? AND password = ?";
+            try (Connection conn = TesKoneksi.getConnection()) { // Gunakan TesKoneksi
+                
+                // KODE KRITIS PERBAIKAN: Ambil id_user dan role
+                String sql = "SELECT id_user, role FROM users WHERE username = ? AND password = ?";
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, user);
                 ps.setString(2, pass);
                 ResultSet rs = ps.executeQuery();
 
                 if (rs.next()) {
+                    loggedInUserId = rs.getInt("id_user"); // Ambil ID user
                     String role = rs.getString("role");
+                    
                     JOptionPane.showMessageDialog(this, "Login berhasil sebagai " + role + "!");
+                    
                     if (role.equalsIgnoreCase("admin")) {
                         frame.showPage("Admin");
                     } else {
-                        frame.showPage("Kasir");
+                        // Navigasi ke KasirPage dengan membawa ID
+                        frame.showKasirPage(loggedInUserId);
                     }
                 } else {
-                    JOptionPane.showMessageDialog(this, "Username atau Password salah!", "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Username atau Password salah! (Pastikan tabel 'users' sudah terisi)", "Error", JOptionPane.ERROR_MESSAGE);
                 }
-
-                rs.close();
-                ps.close();
-                conn.close();
 
             } catch (SQLException ex) {
                 JOptionPane.showMessageDialog(this, "Koneksi database gagal: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
             }
         });
     }
+
+
 
     /**
      * This method is called from within the constructor to initialize the form.

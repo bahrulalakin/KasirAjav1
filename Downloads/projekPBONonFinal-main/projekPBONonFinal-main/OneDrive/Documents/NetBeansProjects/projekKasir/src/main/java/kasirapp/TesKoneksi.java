@@ -1,26 +1,25 @@
-package kasirapp;
+package kasirapp; 
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.SQLException;
+import javax.swing.JOptionPane;
 
 public class TesKoneksi {
-    public static void main(String[] args) {
+    
+    // **Pastikan konfigurasi ini sesuai dengan database Anda**
+    private static final String URL = "jdbc:mysql://localhost:3306/db_kasir";
+    private static final String USER = "root";
+    private static final String PASS = "";
+    
+    public static Connection getConnection() throws SQLException {
         try {
-            // Ganti nama database, user, dan password sesuai konfigurasi XAMPP kamu
-            String url = "jdbc:mysql://localhost:3306/db_kasir";
-            String user = "root";
-            String password = "";
-
-            Connection conn = DriverManager.getConnection(url, user, password);
-            System.out.println("✅ Koneksi ke database berhasil!");
-            conn.close();
-        } catch (Exception e) {
-            System.out.println("❌ Koneksi gagal: " + e.getMessage());
+            // Memastikan driver dimuat (Perlu Library JDBC)
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            return DriverManager.getConnection(URL, USER, PASS);
+        } catch (ClassNotFoundException e) {
+            JOptionPane.showMessageDialog(null, "Driver MySQL tidak ditemukan! Pastikan library JDBC sudah ditambahkan ke proyek.", "Koneksi Error", JOptionPane.ERROR_MESSAGE);
+            throw new SQLException("Driver not found: " + e.getMessage());
         }
     }
-
-    public static Connection getConnection() {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-    
 }

@@ -1,22 +1,15 @@
 package kasirapp.views;
 
+import kasirapp.TesKoneksi;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.time.LocalDate;
 
-/**
- *
- * @author REFI
- */
 public class LaporanPage extends javax.swing.JPanel {
     
-   private JTable table;
+    private JTable table;
     private DefaultTableModel model;
     private JLabel lblTotal;
     private JComboBox<String> cmbJenis;
@@ -25,7 +18,7 @@ public class LaporanPage extends javax.swing.JPanel {
 
     public LaporanPage(MainFrame frame) {
         setLayout(new BorderLayout());
-        setBackground(new Color(0x002855)); // Warna utama biru tua elegan
+        setBackground(new Color(0x002855)); 
 
         contentPanel = new JPanel(null);
         contentPanel.setOpaque(false);
@@ -48,33 +41,31 @@ public class LaporanPage extends javax.swing.JPanel {
         cmbJenis.setBounds(270, 80, 130, 28);
         contentPanel.add(cmbJenis);
 
-        JLabel lblTgl = new JLabel("Tanggal:");
+        JLabel lblTgl = new JLabel("Tanggal (YYYY-MM-DD):");
         lblTgl.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         lblTgl.setForeground(Color.WHITE);
-        lblTgl.setBounds(420, 80, 70, 25);
+        lblTgl.setBounds(420, 80, 150, 25);
         contentPanel.add(lblTgl);
 
         txtTanggal = new JTextField(LocalDate.now().toString());
         txtTanggal.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        txtTanggal.setBounds(490, 80, 100, 28);
+        txtTanggal.setBounds(570, 80, 100, 28);
         contentPanel.add(txtTanggal);
 
         JButton btnTampilkan = new JButton("Tampilkan");
         styleButton(btnTampilkan);
-        btnTampilkan.setBounds(610, 80, 120, 35);
+        btnTampilkan.setBounds(680, 80, 100, 35);
         contentPanel.add(btnTampilkan);
 
         // ====== Tabel Laporan ======
-        String[] kolom = {"ID Transaksi", "Tanggal", "Kasir", "Total"};
+        String[] kolom = {"ID Transaksi", "Tanggal & Waktu", "Kasir", "Total"};
         model = new DefaultTableModel(kolom, 0);
         table = new JTable(model);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         table.setRowHeight(25);
-        table.setBackground(Color.BLACK);
-        table.setForeground(Color.WHITE);
-
+        
         JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setBounds(120, 130, 610, 200);
+        scrollPane.setBounds(120, 130, 660, 200);
         contentPanel.add(scrollPane);
 
         // ====== Label Total ======
@@ -87,7 +78,7 @@ public class LaporanPage extends javax.swing.JPanel {
         JButton btnKembali = new JButton("Kembali");
         styleButton(btnKembali);
         btnKembali.setBackground(new Color(100, 100, 100));
-        btnKembali.setBounds(630, 350, 100, 35);
+        btnKembali.setBounds(680, 350, 100, 35);
         contentPanel.add(btnKembali);
 
         // ====== Event Tombol ======
@@ -95,14 +86,13 @@ public class LaporanPage extends javax.swing.JPanel {
         btnKembali.addActionListener(e -> frame.showPage("Admin"));
     }
 
-    // ================= STYLE BUTTON =================
     private void styleButton(JButton btn) {
         btn.setBackground(new Color(0x003F7F));
         btn.setForeground(Color.WHITE);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btn.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
+        btn.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
@@ -114,42 +104,51 @@ public class LaporanPage extends javax.swing.JPanel {
             }
         });
     }
+    
+    private Connection getConnection() throws SQLException {
+        return TesKoneksi.getConnection(); // Gunakan TesKoneksi
+    }
 
-    // ================= METHOD DATABASE =================
     private void tampilkanLaporan() {
         model.setRowCount(0);
         double total = 0;
 
         String jenis = cmbJenis.getSelectedItem().toString();
         String tanggalInput = txtTanggal.getText().trim();
+        
+        if (tanggalInput.isEmpty() || !tanggalInput.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            JOptionPane.showMessageDialog(this, "Format tanggal harus YYYY-MM-DD", "Peringatan", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-        String url = "jdbc:mysql://localhost:3306/db_kasir";
-        String dbUser = "root";
-        String dbPass = "";
-
-        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
+        try (Connection conn = getConnection()) { 
             String sql = "";
 
+            // Query JOIN Transaksi (t) dengan Users (u)
+            String baseSql = "SELECT t.id_transaksi, t.tanggal_transaksi, u.username AS nama_kasir, t.total_harga "
+                           + "FROM transaksi t JOIN users u ON t.id_user_kasir = u.id_user ";
+
             if (jenis.equals("Harian")) {
-                sql = "SELECT id_transaksi, tanggal, kasir, total FROM transaksi WHERE DATE(tanggal) = ?";
+                sql = baseSql + "WHERE DATE(t.tanggal_transaksi) = ?"; 
             } else if (jenis.equals("Mingguan")) {
-                sql = "SELECT id_transaksi, tanggal, kasir, total FROM transaksi WHERE tanggal BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND ?";
+                // Mencari data dalam rentang 7 hari (dari TGL_INPUT mundur 6 hari)
+                sql = baseSql + "WHERE t.tanggal_transaksi BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?"; 
             }
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 if (jenis.equals("Harian")) {
                     ps.setString(1, tanggalInput);
                 } else {
-                    ps.setString(1, tanggalInput);
-                    ps.setString(2, tanggalInput);
+                    ps.setString(1, tanggalInput); // Tanggal awal (6 hari sebelum tanggal input)
+                    ps.setString(2, tanggalInput); // Tanggal akhir
                 }
 
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         String id = rs.getString("id_transaksi");
-                        String tgl = rs.getString("tanggal");
-                        String kasir = rs.getString("kasir");
-                        double totalTransaksi = rs.getDouble("total");
+                        String tgl = rs.getString("tanggal_transaksi");
+                        String kasir = rs.getString("nama_kasir"); 
+                        double totalTransaksi = rs.getDouble("total_harga"); 
                         total += totalTransaksi;
                         model.addRow(new Object[]{id, tgl, kasir, totalTransaksi});
                     }
@@ -163,6 +162,8 @@ public class LaporanPage extends javax.swing.JPanel {
                     "Error Database", JOptionPane.ERROR_MESSAGE);
         }
     }
+    
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always

@@ -1,23 +1,12 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JPanel.java to edit this template
- */
 package kasirapp.views;
 
+import kasirapp.TesKoneksi;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 
-/**
- *
- * @author REFI
- */
 public class KelolaAkunPage extends javax.swing.JPanel {
 
     private JTable table;
@@ -30,6 +19,10 @@ public class KelolaAkunPage extends javax.swing.JPanel {
         this.frame = frame;
         initComponents();
         customInit();
+    }
+    
+    private Connection getConnection() throws SQLException {
+        return TesKoneksi.getConnection(); // Gunakan TesKoneksi
     }
 
     private void customInit() {
@@ -48,17 +41,26 @@ public class KelolaAkunPage extends javax.swing.JPanel {
         panelUtama.add(lblTitle);
 
         // Tabel
-        String[] kolom = {"Username", "Password", "Role"};
+        String[] kolom = {"ID", "Username", "Password", "Role"}; // Tambahkan ID
         model = new DefaultTableModel(kolom, 0) {
-            // agar kolom username tidak bisa diedit langsung di table
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
+            }
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) return Integer.class;
+                return super.getColumnClass(columnIndex);
             }
         };
         table = new JTable(model);
         table.setRowHeight(25);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        
+        table.getColumnModel().getColumn(0).setMinWidth(0); // Sembunyikan ID
+        table.getColumnModel().getColumn(0).setMaxWidth(0); // Sembunyikan ID
+        table.getColumnModel().getColumn(1).setPreferredWidth(200);
+        table.getColumnModel().getColumn(2).setPreferredWidth(200);
 
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBounds(80, 70, 620, 150);
@@ -88,7 +90,7 @@ public class KelolaAkunPage extends javax.swing.JPanel {
         lblRole.setBounds(100, 290, 80, 25);
         panelUtama.add(lblRole);
 
-        cmbRole = new JComboBox<>(new String[]{"admin", "kasir"});
+        cmbRole = new JComboBox<>(new String[]{"Admin", "Kasir"}); // Kapital A
         cmbRole.setBounds(190, 290, 150, 25);
         panelUtama.add(cmbRole);
 
@@ -128,17 +130,15 @@ public class KelolaAkunPage extends javax.swing.JPanel {
                 if (e.getClickCount() == 2) {
                     int row = table.getSelectedRow();
                     if (row != -1) {
-                        txtUsername.setText(model.getValueAt(row, 0).toString());
-                        txtPassword.setText(model.getValueAt(row, 1).toString());
-                        cmbRole.setSelectedItem(model.getValueAt(row, 2).toString());
-                        // biarkan username tetap bisa diedit saat mau buat akun baru,
-                        // tapi saat edit kita akan gunakan username yang ada di tabel sebagai key
+                        txtUsername.setText(model.getValueAt(row, 1).toString());
+                        txtPassword.setText(model.getValueAt(row, 2).toString());
+                        cmbRole.setSelectedItem(model.getValueAt(row, 3).toString());
+                        // Saat double-click, kita hanya mengisi form, eksekusi edit dilakukan lewat tombol Edit
                     }
                 }
             }
         });
 
-        // load data awal dari database
         loadData();
     }
 
@@ -167,22 +167,18 @@ public class KelolaAkunPage extends javax.swing.JPanel {
 
     private void loadData() {
         model.setRowCount(0);
-        String url = "jdbc:mysql://localhost:3306/db_kasir";
-        String dbUser = "root";
-        String dbPass = "";
-        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
-            String sql = "SELECT username, password, role FROM users";
+        try (Connection conn = getConnection()) {
+            String sql = "SELECT id_user, username, password, role FROM users";
             PreparedStatement ps = conn.prepareStatement(sql);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 model.addRow(new Object[]{
+                        rs.getInt("id_user"), // Kolom ID
                         rs.getString("username"),
                         rs.getString("password"),
                         rs.getString("role")
                 });
             }
-            rs.close();
-            ps.close();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Gagal memuat data akun: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -197,33 +193,14 @@ public class KelolaAkunPage extends javax.swing.JPanel {
             JOptionPane.showMessageDialog(this, "Lengkapi semua field!", "Peringatan", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        String url = "jdbc:mysql://localhost:3306/db_kasir";
-        String dbUser = "root";
-        String dbPass = "";
-
-        // cek duplikat username
-        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
-            String cekSql = "SELECT username FROM users WHERE username = ?";
-            PreparedStatement cekPs = conn.prepareStatement(cekSql);
-            cekPs.setString(1, user);
-            ResultSet cekRs = cekPs.executeQuery();
-            if (cekRs.next()) {
-                JOptionPane.showMessageDialog(this, "Username sudah ada. Gunakan username lain.", "Info", JOptionPane.INFORMATION_MESSAGE);
-                cekRs.close();
-                cekPs.close();
-                return;
-            }
-            cekRs.close();
-            cekPs.close();
-
+        
+        try (Connection conn = getConnection()) {
             String sql = "INSERT INTO users (username, password, role) VALUES (?, ?, ?)";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, user);
             ps.setString(2, pass);
             ps.setString(3, role);
             ps.executeUpdate();
-            ps.close();
 
             JOptionPane.showMessageDialog(this, "Akun berhasil ditambahkan!");
             txtUsername.setText("");
@@ -231,108 +208,60 @@ public class KelolaAkunPage extends javax.swing.JPanel {
             cmbRole.setSelectedIndex(0);
             loadData();
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Gagal menambah akun: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            // Error code 1062 = Duplicate entry (Username sudah ada)
+            if (e.getErrorCode() == 1062) {
+                 JOptionPane.showMessageDialog(this, "Username sudah ada. Gunakan username lain.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                 JOptionPane.showMessageDialog(this, "Gagal menambah akun: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
-    // siapkan form edit (ambil username dari baris terpilih)
     private void prepareEditAkun() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Pilih akun yang ingin diedit!");
+            JOptionPane.showMessageDialog(this, "Pilih akun yang ingin diedit!", "Peringatan", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String username = model.getValueAt(row, 0).toString();
-        // Isi form dengan data terpilih
+        
+        // Ambil ID user dari kolom 0
+        int userId = (int) model.getValueAt(row, 0); 
+        String username = model.getValueAt(row, 1).toString();
+        
+        // Pastikan form terisi dari baris terpilih
         txtUsername.setText(username);
-        txtPassword.setText(model.getValueAt(row, 1).toString());
-        cmbRole.setSelectedItem(model.getValueAt(row, 2).toString());
-
-        // Tampilkan dialog konfirmasi untuk edit agar tidak langsung mengeksekusi
-        int option = JOptionPane.showConfirmDialog(this, createEditPanel(), "Edit Akun", JOptionPane.OK_CANCEL_OPTION);
+        txtPassword.setText(model.getValueAt(row, 2).toString());
+        cmbRole.setSelectedItem(model.getValueAt(row, 3).toString());
+        
+        // Prompt pengguna untuk mengedit field yang sudah terisi di form
+        int option = JOptionPane.showConfirmDialog(this, 
+                "<html>Edit data di form (teks di bawah tabel) lalu klik OK untuk menyimpan perubahan. <br>Username tidak dapat diubah!</html>", 
+                "Edit Akun " + username, 
+                JOptionPane.OK_CANCEL_OPTION);
+        
         if (option == JOptionPane.OK_OPTION) {
-            editAkun(username); // gunakan username lama sebagai key
+            // Gunakan nilai dari form yang sudah terisi/diedit
+            String newPass = txtPassword.getText().trim();
+            String newRole = cmbRole.getSelectedItem().toString();
+            editAkun(userId, newPass, newRole); 
         }
     }
 
-    // panel bantu untuk dialog edit (menampilkan kembali field)
-    private JPanel createEditPanel() {
-        JPanel p = new JPanel(null);
-        p.setPreferredSize(new Dimension(420, 140));
-
-        JLabel l1 = new JLabel("Username:");
-        l1.setBounds(10, 10, 80, 25);
-        p.add(l1);
-
-        JTextField tUser = new JTextField(txtUsername.getText());
-        tUser.setBounds(100, 10, 300, 25);
-        tUser.setEditable(false); // username tidak bisa diganti lewat dialog edit untuk menyederhanakan
-        p.add(tUser);
-
-        JLabel l2 = new JLabel("Password:");
-        l2.setBounds(10, 45, 80, 25);
-        p.add(l2);
-
-        JTextField tPass = new JTextField(txtPassword.getText());
-        tPass.setBounds(100, 45, 300, 25);
-        p.add(tPass);
-
-        JLabel l3 = new JLabel("Role:");
-        l3.setBounds(10, 80, 80, 25);
-        p.add(l3);
-
-        JComboBox<String> cb = new JComboBox<>(new String[]{"admin", "kasir"});
-        cb.setBounds(100, 80, 150, 25);
-        cb.setSelectedItem(cmbRole.getSelectedItem());
-        p.add(cb);
-
-        // saat OK nanti ambil kembali isian ke txtPassword & cmbRole agar editAkun membaca nilai yang terbaru
-        // kita simpan sementara ke komponen form utama
-        // lakukan override action pada tombol OK lewat dialog (lebih sederhana: setelah dialog OK, kita set nilai)
-        // tetapi karena JOptionPane tidak memberi akses langsung ke tombol OK di sini, kita lakukan setelah dialog kembali di prepareEditAkun()
-        // untuk memastikan nilai terbaru, update txtPassword & cmbRole sekarang dengan nilai form dialog:
-        // (NOTE: dialog values already set by the fields txtPassword and cmbRole earlier; to reflect edited fields,
-        //  we will read directly from these dialog components after JOptionPane returns — but since we can't read them directly,
-        //  we instead show separate modal input using JOptionPane.showConfirmDialog that returns OK/Cancel. Simpler approach:)
-        // To keep code simple and predictable, we'll show a new JOptionPane in editAkun() that re-reads values from the visible form fields.
-        // So here we just return a panel that user edits; after OK, prepareEditAkun() calls editAkun(username) which will read current txtPassword/cmbRole.
-        // To make that work, before calling JOptionPane.showConfirmDialog we need to make sure txtPassword and cmbRole reflect what user typed in this panel.
-        // We'll synchronize by copying panel's components back to main fields just before returning from dialog.
-
-        // To synchronize: add a focus listener on panel that will transfer values on dialog close — but it's complex.
-        // Simpler: avoid the custom panel complexity: we already set main form fields before showing dialog, so user will edit those main fields directly.
-        // So here, instead of using custom panel, we will prompt user to edit the form fields already visible (main form). To keep UX simple,
-        // return a small informative panel that tells user to edit fields in the form then press OK.
-        JPanel info = new JPanel(null);
-        info.setPreferredSize(new Dimension(420, 80));
-        JLabel infoLabel = new JLabel("<html>Edit data di form (teks di bawah tabel) lalu klik OK untuk menyimpan perubahan.</html>");
-        infoLabel.setBounds(10, 10, 400, 60);
-        info.add(infoLabel);
-        return info;
-    }
-
-    // edit menggunakan username lama sebagai key
-    private void editAkun(String usernameKey) {
-        String newPass = txtPassword.getText().trim();
-        String newRole = cmbRole.getSelectedItem().toString();
-
+    // edit menggunakan id_user sebagai key
+    private void editAkun(int userIdKey, String newPass, String newRole) {
         if (newPass.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Password tidak boleh kosong!", "Peringatan", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        String url = "jdbc:mysql://localhost:3306/db_kasir";
-        String dbUser = "root";
-        String dbPass = "";
-
-        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
-            String sql = "UPDATE users SET password = ?, role = ? WHERE username = ?";
+        try (Connection conn = getConnection()) {
+            // Update berdasarkan id_user
+            String sql = "UPDATE users SET password = ?, role = ? WHERE id_user = ?"; 
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, newPass);
             ps.setString(2, newRole);
-            ps.setString(3, usernameKey);
+            ps.setInt(3, userIdKey); 
             int updated = ps.executeUpdate();
-            ps.close();
 
             if (updated > 0) {
                 JOptionPane.showMessageDialog(this, "Akun berhasil diperbarui!");
@@ -355,20 +284,23 @@ public class KelolaAkunPage extends javax.swing.JPanel {
             return;
         }
 
-        String username = model.getValueAt(row, 0).toString();
+        int userId = (int) model.getValueAt(row, 0); 
+        String username = model.getValueAt(row, 1).toString();
+
+        if (username.equalsIgnoreCase("admin")) {
+            JOptionPane.showMessageDialog(this, "Akun Admin tidak dapat dihapus.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
         int confirm = JOptionPane.showConfirmDialog(this, "Yakin ingin menghapus akun '" + username + "'?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
 
-        String url = "jdbc:mysql://localhost:3306/db_kasir";
-        String dbUser = "root";
-        String dbPass = "";
-
-        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
-            String sql = "DELETE FROM users WHERE username = ?";
+        try (Connection conn = getConnection()) {
+            // Hapus berdasarkan id_user
+            String sql = "DELETE FROM users WHERE id_user = ?"; 
             PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, username);
+            ps.setInt(1, userId); 
             int deleted = ps.executeUpdate();
-            ps.close();
 
             if (deleted > 0) {
                 JOptionPane.showMessageDialog(this, "Akun berhasil dihapus!");
@@ -377,9 +309,16 @@ public class KelolaAkunPage extends javax.swing.JPanel {
                 JOptionPane.showMessageDialog(this, "Akun tidak ditemukan (gagal hapus).", "Info", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Gagal menghapus akun: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+             // Cek jika akun sudah terikat dengan transaksi (FK error)
+            if (e.getErrorCode() == 1451) {
+                JOptionPane.showMessageDialog(this, "Gagal menghapus akun: Akun ini sudah tercatat dalam transaksi.", "Error", JOptionPane.ERROR_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Gagal menghapus akun: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
+    
+
 
     /**
      * This method is called from within the constructor to initialize the form.

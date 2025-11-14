@@ -7,14 +7,11 @@ package kasirapp.views;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * @author Refi
- */
 public class AdminPage extends javax.swing.JPanel {
 
     public AdminPage(MainFrame frame) {
         setLayout(new GridBagLayout());
-        setBackground(new Color(0, 40, 85)); // Warna sama seperti KasirPage dan LoginPage
+        setBackground(new Color(0, 40, 85)); 
 
         // Panel utama (isi dashboard)
         JPanel panel = new JPanel();
@@ -82,6 +79,8 @@ public class AdminPage extends javax.swing.JPanel {
         button.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
     }
+    
+
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
