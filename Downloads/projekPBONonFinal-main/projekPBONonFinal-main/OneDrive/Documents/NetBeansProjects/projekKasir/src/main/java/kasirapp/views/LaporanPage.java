@@ -3,6 +3,11 @@ package kasirapp.views;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 
 /**
@@ -11,7 +16,7 @@ import java.time.LocalDate;
  */
 public class LaporanPage extends javax.swing.JPanel {
     
-    private JTable table;
+   private JTable table;
     private DefaultTableModel model;
     private JLabel lblTotal;
     private JComboBox<String> cmbJenis;
@@ -19,13 +24,11 @@ public class LaporanPage extends javax.swing.JPanel {
     private JPanel contentPanel;
 
     public LaporanPage(MainFrame frame) {
-
         setLayout(new BorderLayout());
         setBackground(new Color(0x002855)); // Warna utama biru tua elegan
 
-        // Panel konten utama di tengah (responsif)
         contentPanel = new JPanel(null);
-        contentPanel.setOpaque(false); // biar background biru tetap terlihat
+        contentPanel.setOpaque(false);
         add(contentPanel, BorderLayout.CENTER);
 
         JLabel lblTitle = new JLabel("Laporan Penjualan", SwingConstants.CENTER);
@@ -83,51 +86,82 @@ public class LaporanPage extends javax.swing.JPanel {
 
         JButton btnKembali = new JButton("Kembali");
         styleButton(btnKembali);
-        btnKembali.setBackground(new Color(100, 100, 100)); // abu-abu elegan
+        btnKembali.setBackground(new Color(100, 100, 100));
         btnKembali.setBounds(630, 350, 100, 35);
         contentPanel.add(btnKembali);
 
-        // ====== Event Dummy ======
-        btnTampilkan.addActionListener(e -> tampilkanDummy());
+        // ====== Event Tombol ======
+        btnTampilkan.addActionListener(e -> tampilkanLaporan());
         btnKembali.addActionListener(e -> frame.showPage("Admin"));
     }
 
+    // ================= STYLE BUTTON =================
     private void styleButton(JButton btn) {
-        btn.setBackground(new Color(0x003F7F)); // biru lebih terang
+        btn.setBackground(new Color(0x003F7F));
         btn.setForeground(Color.WHITE);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
 
-        // Hover effect lembut
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
                 btn.setBackground(new Color(0x0055AA));
             }
+
             public void mouseExited(java.awt.event.MouseEvent evt) {
                 btn.setBackground(new Color(0x003F7F));
             }
         });
     }
 
-    private void tampilkanDummy() {
-        model.setRowCount(0); // hapus data lama
-        String jenis = cmbJenis.getSelectedItem().toString();
+    // ================= METHOD DATABASE =================
+    private void tampilkanLaporan() {
+        model.setRowCount(0);
         double total = 0;
 
-        if (jenis.equals("Harian")) {
-            model.addRow(new Object[]{"T001", LocalDate.now(), "Kasir1", 50000});
-            model.addRow(new Object[]{"T002", LocalDate.now(), "Kasir2", 80000});
-            total = 130000;
-        } else {
-            model.addRow(new Object[]{"T001", LocalDate.now().minusDays(5), "Kasir1", 50000});
-            model.addRow(new Object[]{"T002", LocalDate.now().minusDays(4), "Kasir2", 80000});
-            model.addRow(new Object[]{"T003", LocalDate.now().minusDays(3), "Kasir1", 100000});
-            total = 230000;
-        }
+        String jenis = cmbJenis.getSelectedItem().toString();
+        String tanggalInput = txtTanggal.getText().trim();
 
-        lblTotal.setText("Total Penjualan: Rp " + total);
+        String url = "jdbc:mysql://localhost:3306/db_kasir";
+        String dbUser = "root";
+        String dbPass = "";
+
+        try (Connection conn = DriverManager.getConnection(url, dbUser, dbPass)) {
+            String sql = "";
+
+            if (jenis.equals("Harian")) {
+                sql = "SELECT id_transaksi, tanggal, kasir, total FROM transaksi WHERE DATE(tanggal) = ?";
+            } else if (jenis.equals("Mingguan")) {
+                sql = "SELECT id_transaksi, tanggal, kasir, total FROM transaksi WHERE tanggal BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND ?";
+            }
+
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                if (jenis.equals("Harian")) {
+                    ps.setString(1, tanggalInput);
+                } else {
+                    ps.setString(1, tanggalInput);
+                    ps.setString(2, tanggalInput);
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String id = rs.getString("id_transaksi");
+                        String tgl = rs.getString("tanggal");
+                        String kasir = rs.getString("kasir");
+                        double totalTransaksi = rs.getDouble("total");
+                        total += totalTransaksi;
+                        model.addRow(new Object[]{id, tgl, kasir, totalTransaksi});
+                    }
+                }
+            }
+
+            lblTotal.setText("Total Penjualan: Rp " + String.format("%,.0f", total));
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Gagal mengambil data: " + ex.getMessage(),
+                    "Error Database", JOptionPane.ERROR_MESSAGE);
+        }
     }
     /**
      * This method is called from within the constructor to initialize the form.

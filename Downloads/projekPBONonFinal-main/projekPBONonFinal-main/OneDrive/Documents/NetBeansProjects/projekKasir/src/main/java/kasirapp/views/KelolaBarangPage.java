@@ -18,11 +18,10 @@ import kasirapp.views.MainFrame;
  */
 public class KelolaBarangPage extends javax.swing.JPanel {
     
-    private final JTable table;
-    private final DefaultTableModel model;
-    private final java.util.List<Barang> daftarBarang;
-    private final JPanel contentPanel;
-    
+    private JTable table;
+    private DefaultTableModel model;
+    private JPanel contentPanel;
+
     public KelolaBarangPage(MainFrame frame) {
 
         setLayout(new BorderLayout());
@@ -39,15 +38,14 @@ public class KelolaBarangPage extends javax.swing.JPanel {
         title.setBounds(0, 20, 800, 40);
         contentPanel.add(title);
 
-        // Data dummy
-        daftarBarang = new ArrayList<>();
-        daftarBarang.add(new Barang("B001", "Kopi Hitam", 10000, 20));
-        daftarBarang.add(new Barang("B002", "Teh Manis", 8000, 25));
-        daftarBarang.add(new Barang("B003", "Roti Bakar", 15000, 15));
-
-        // Tabel
-        String[] kolom = {"Kode", "Nama Barang", "Harga", "Stok"};
-        model = new DefaultTableModel(kolom, 0);
+        // Tabel (kolom menampilkan produk_id sebagai "Kode")
+        String[] kolom = {"ID", "Nama Produk", "Harga Jual", "Stok", "Satuan"};
+        model = new DefaultTableModel(kolom, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // agar tabel tidak bisa diedit langsung
+            }
+        };
         table = new JTable(model);
         table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         table.setRowHeight(25);
@@ -58,6 +56,7 @@ public class KelolaBarangPage extends javax.swing.JPanel {
         scrollPane.setBounds(150, 80, 500, 220);
         contentPanel.add(scrollPane);
 
+        // Load data langsung dari database
         loadTableData();
 
         // Tombol
@@ -87,6 +86,19 @@ public class KelolaBarangPage extends javax.swing.JPanel {
         btnEdit.addActionListener(e -> editBarang());
         btnHapus.addActionListener(e -> hapusBarang());
         btnKembali.addActionListener(e -> frame.showPage("Admin"));
+
+        // double-click row => isi dialog edit cepat
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    int row = table.getSelectedRow();
+                    if (row != -1) {
+                        String id = model.getValueAt(row, 0).toString();
+                        showEditDialog(id);
+                    }
+                }
+            }
+        });
     }
 
     private void styleButton(JButton btn) {
@@ -100,130 +112,214 @@ public class KelolaBarangPage extends javax.swing.JPanel {
         // Hover effect
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                btn.setBackground(new Color(100, 100, 100));
+                btn.setBackground(new Color(50, 90, 150));
             }
             public void mouseExited(java.awt.event.MouseEvent evt) {
-                btn.setBackground(new Color(100, 100, 100));
+                btn.setBackground(new Color(0x003F7F));
             }
         });
     }
 
+    // ------------------ DATABASE OPERATIONS ------------------
+
+    private Connection getConnection() throws SQLException {
+        String url = "jdbc:mysql://localhost:3306/db_kasir";
+        String user = "root";
+        String pass = "";
+        return DriverManager.getConnection(url, user, pass);
+    }
+
     private void loadTableData() {
         model.setRowCount(0);
-        for (Barang b : daftarBarang) {
-            model.addRow(new Object[]{b.kode, b.nama, b.harga, b.stok});
+        String sql = "SELECT produk_id, nama_produk, harga_jual, stok, satuan FROM produk ORDER BY produk_id";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                model.addRow(new Object[]{
+                        rs.getInt("produk_id"),
+                        rs.getString("nama_produk"),
+                        rs.getDouble("harga_jual"),
+                        rs.getInt("stok"),
+                        rs.getString("satuan")
+                });
+            }
+
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Gagal memuat data produk: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void tambahBarang() {
-    JTextField tfNama = new JTextField();
-    JTextField tfHargaBeli = new JTextField();
-    JTextField tfHargaJual = new JTextField();
-    JTextField tfStok = new JTextField();
-    JTextField tfSatuan = new JTextField();
+        // Form input sesuai struktur produk
+        JTextField tfNama = new JTextField();
+        JTextField tfHargaBeli = new JTextField();
+        JTextField tfHargaJual = new JTextField();
+        JTextField tfStok = new JTextField();
+        JTextField tfSatuan = new JTextField();
 
         Object[] input = {
-        "Nama Produk:", tfNama,
-        "Harga Beli:", tfHargaBeli,
-        "Harga Jual:", tfHargaJual,
-        "Stok:", tfStok,
-        "Satuan:", tfSatuan
-    };
-        int option = JOptionPane.showConfirmDialog(this, input, "Tambah Barang", JOptionPane.OK_CANCEL_OPTION);
-            if (option == JOptionPane.OK_OPTION) {
-        try {
-            String nama = tfNama.getText();
-            double hargaBeli = Double.parseDouble(tfHargaBeli.getText());
-            double hargaJual = Double.parseDouble(tfHargaJual.getText());
-            int stok = Integer.parseInt(tfStok.getText());
-            String satuan = tfSatuan.getText();
+                "Nama Produk:", tfNama,
+                "Harga Beli:", tfHargaBeli,
+                "Harga Jual:", tfHargaJual,
+                "Stok:", tfStok,
+                "Satuan:", tfSatuan
+        };
 
-            String url = "jdbc:mysql://localhost:3306/db_kasir";
-            String user = "root"; // ganti sesuai user MySQL kamu
-            String password = ""; // isi kalau MySQL kamu pakai password
+        int option = JOptionPane.showConfirmDialog(this, input, "Tambah Produk", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                String nama = tfNama.getText().trim();
+                double hargaBeli = Double.parseDouble(tfHargaBeli.getText().trim());
+                double hargaJual = Double.parseDouble(tfHargaJual.getText().trim());
+                int stok = Integer.parseInt(tfStok.getText().trim());
+                String satuan = tfSatuan.getText().trim();
 
-            Connection conn = DriverManager.getConnection(url, user, password);
+                String sql = "INSERT INTO produk (nama_produk, harga_beli, harga_jual, stok, satuan) VALUES (?, ?, ?, ?, ?)";
+                try (Connection conn = getConnection();
+                     PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, nama);
+                    ps.setDouble(2, hargaBeli);
+                    ps.setDouble(3, hargaJual);
+                    ps.setInt(4, stok);
+                    ps.setString(5, satuan);
+                    ps.executeUpdate();
+                }
 
-            String sql = "INSERT INTO produk (nama_produk, harga_beli, harga_jual, stok, satuan) VALUES (?, ?, ?, ?, ?)";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, nama);
-            ps.setDouble(2, hargaBeli);
-            ps.setDouble(3, hargaJual);
-            ps.setInt(4, stok);
-            ps.setString(5, satuan);
-
-            ps.executeUpdate();
-            ps.close();
-            conn.close();
-
-            JOptionPane.showMessageDialog(this, "Produk berhasil ditambahkan!");
-            loadTableData(); // panggil fungsi untuk refresh tabel
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Input harga/stok harus berupa angka!");
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Gagal menyimpan ke database: " + ex.getMessage());
+                JOptionPane.showMessageDialog(this, "Produk berhasil ditambahkan!");
+                loadTableData();
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Input harga/stok tidak valid", "Peringatan", JOptionPane.WARNING_MESSAGE);
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(this, "Gagal menambah produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
-    }
     }
 
     private void editBarang() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Pilih barang yang ingin diedit");
+            JOptionPane.showMessageDialog(this, "Pilih produk yang ingin diedit");
             return;
         }
+        String id = model.getValueAt(row, 0).toString();
+        showEditDialog(id);
+    }
 
-        Barang b = daftarBarang.get(row);
-        JTextField tfNama = new JTextField(b.nama);
-        JTextField tfHarga = new JTextField(String.valueOf(b.harga));
-        JTextField tfStok = new JTextField(String.valueOf(b.stok));
+    private void showEditDialog(String produkId) {
+        // ambil data produk dari DB
+        String sqlSelect = "SELECT nama_produk, harga_beli, harga_jual, stok, satuan FROM produk WHERE produk_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sqlSelect)) {
 
-        Object[] input = {
-                "Nama:", tfNama,
-                "Harga:", tfHarga,
-                "Stok:", tfStok
-        };
+            ps.setInt(1, Integer.parseInt(produkId));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    JTextField tfNama = new JTextField(rs.getString("nama_produk"));
+                    JTextField tfHargaBeli = new JTextField(String.valueOf(rs.getDouble("harga_beli")));
+                    JTextField tfHargaJual = new JTextField(String.valueOf(rs.getDouble("harga_jual")));
+                    JTextField tfStok = new JTextField(String.valueOf(rs.getInt("stok")));
+                    JTextField tfSatuan = new JTextField(rs.getString("satuan"));
 
-        int option = JOptionPane.showConfirmDialog(this, input, "Edit Barang", JOptionPane.OK_CANCEL_OPTION);
-        if (option == JOptionPane.OK_OPTION) {
-            try {
-                b.nama = tfNama.getText();
-                b.harga = Double.parseDouble(tfHarga.getText());
-                b.stok = Integer.parseInt(tfStok.getText());
-                loadTableData();
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Input harga/stok tidak valid");
+                    Object[] input = {
+                            "Nama Produk:", tfNama,
+                            "Harga Beli:", tfHargaBeli,
+                            "Harga Jual:", tfHargaJual,
+                            "Stok:", tfStok,
+                            "Satuan:", tfSatuan
+                    };
+
+                    int option = JOptionPane.showConfirmDialog(this, input, "Edit Produk (ID: " + produkId + ")", JOptionPane.OK_CANCEL_OPTION);
+                    if (option == JOptionPane.OK_OPTION) {
+                        try {
+                            String nama = tfNama.getText().trim();
+                            double hargaBeli = Double.parseDouble(tfHargaBeli.getText().trim());
+                            double hargaJual = Double.parseDouble(tfHargaJual.getText().trim());
+                            int stok = Integer.parseInt(tfStok.getText().trim());
+                            String satuan = tfSatuan.getText().trim();
+
+                            String sqlUpdate = "UPDATE produk SET nama_produk = ?, harga_beli = ?, harga_jual = ?, stok = ?, satuan = ? WHERE produk_id = ?";
+                            try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
+                                psUpdate.setString(1, nama);
+                                psUpdate.setDouble(2, hargaBeli);
+                                psUpdate.setDouble(3, hargaJual);
+                                psUpdate.setInt(4, stok);
+                                psUpdate.setString(5, satuan);
+                                psUpdate.setInt(6, Integer.parseInt(produkId));
+                                int updated = psUpdate.executeUpdate();
+                                if (updated > 0) {
+                                    JOptionPane.showMessageDialog(this, "Produk berhasil diperbarui!");
+                                } else {
+                                    JOptionPane.showMessageDialog(this, "Gagal memperbarui produk (tidak ditemukan).", "Info", JOptionPane.INFORMATION_MESSAGE);
+                                }
+                            }
+                            loadTableData();
+                        } catch (NumberFormatException ex) {
+                            JOptionPane.showMessageDialog(this, "Input harga/stok tidak valid", "Peringatan", JOptionPane.WARNING_MESSAGE);
+                        }
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "Produk tidak ditemukan.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                    loadTableData();
+                }
             }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Gagal mengambil data produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void hapusBarang() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Pilih barang yang ingin dihapus");
+            JOptionPane.showMessageDialog(this, "Pilih produk yang ingin dihapus");
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this, "Yakin ingin menghapus barang ini?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            daftarBarang.remove(row);
+        String id = model.getValueAt(row, 0).toString();
+        int confirm = JOptionPane.showConfirmDialog(this, "Yakin ingin menghapus produk ID: " + id + " ?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+
+        String sqlDelete = "DELETE FROM produk WHERE produk_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sqlDelete)) {
+
+            ps.setInt(1, Integer.parseInt(id));
+            int deleted = ps.executeUpdate();
+            if (deleted > 0) {
+                JOptionPane.showMessageDialog(this, "Produk berhasil dihapus!");
+            } else {
+                JOptionPane.showMessageDialog(this, "Produk tidak ditemukan (gagal hapus).", "Info", JOptionPane.INFORMATION_MESSAGE);
+            }
             loadTableData();
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Gagal menghapus produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // Inner class Barang (sementara)
+    // Inner class Barang (tidak wajib, tapi disimpan untuk kompatibilitas kode lama)
     class Barang {
-        String kode, nama;
-        double harga;
+        int id;
+        String nama;
+        double hargaJual;
         int stok;
+        String satuan;
 
-        Barang(String kode, String nama, double harga, int stok) {
-            this.kode = kode;
+        Barang(int id, String nama, double hargaJual, int stok, String satuan) {
+            this.id = id;
             this.nama = nama;
-            this.harga = harga;
+            this.hargaJual = hargaJual;
             this.stok = stok;
+            this.satuan = satuan;
         }
     }
+
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
+     */
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
